@@ -21,7 +21,7 @@ header{position:sticky;top:0;z-index:1000;display:flex;align-items:center;justif
 <main class="app">
 <section id="profile" class="page active"><div class="hero glass"><div><h1>👤 Профиль сотрудника</h1><p>Личный профиль и рабочие памятки.</p></div><div class="actions"><button class="btn primary" data-action="edit-profile">✏️ Редактировать</button><button class="btn orange" data-action="add-note">📌 Памятка</button></div></div><div class="profile"><div class="glass profile-card"><div class="avatar" id="avatar">М</div><h2 id="pname">Максим</h2><span class="badge" id="prole">Машинист-инструктор</span><div class="info" id="pinfo"></div></div><div class="glass notes"><h2>📌 Закреплённые памятки</h2><div id="notes"></div></div></div></section>
 <section id="news" class="page"><div class="hero glass"><div><h1>📰 Новости</h1><p>Новости метро и УЖД Максиграда.</p></div><button class="btn primary" data-action="add-news">＋ Написать новость</button></div><div id="newslist"></div></section>
-<section id="db" class="page"><div class="hero glass"><div><h1>📚 База данных ПС</h1><p>Подвижной состав УЖД. Сохранение — в облачной базе.</p></div><div class="actions"><button class="btn secondary" data-action="export">💾 Экспорт</button><button class="btn primary" data-action="add-db">＋ Добавить ПС</button></div></div><div class="glass panel"><div class="kpis" id="dbkpis"></div><div class="toolbar"><input class="input" id="dbq" placeholder="Поиск по номеру, модели, депо"><select id="dbstate"><option value="">Все состояния</option><option>В эксплуатации</option><option>В ремонте</option><option>На мойке</option><option>В депо</option><option>Выведен из эксплуатации</option><option>Списан</option></select></div><div class="table"><table><thead><tr><th>Серия / №</th><th>Тип</th><th>Колея</th><th>Депо</th><th>Год</th><th>Состояние</th><th>Примечание</th><th>Действия</th></tr></thead><tbody id="dbrows"></tbody></table></div></div></section>
+<section id="db" class="page"><div class="hero glass"><div><h1>📚 База данных ПС</h1><p>Подвижной состав УЖД. Облачное и локальное сохранение в браузере.</p></div><div class="actions"><button class="btn secondary" data-action="export">💾 Экспорт</button><button class="btn primary" data-action="add-db">＋ Добавить ПС</button></div></div><div class="glass panel"><div class="kpis" id="dbkpis"></div><div class="toolbar"><input class="input" id="dbq" placeholder="Поиск по номеру, модели, депо"><select id="dbstate"><option value="">Все состояния</option><option>В эксплуатации</option><option>В ремонте</option><option>На мойке</option><option>В депо</option><option>Выведен из эксплуатации</option><option>Списан</option></select></div><div class="table"><table><thead><tr><th>Серия / №</th><th>Тип</th><th>Колея</th><th>Депо</th><th>Год</th><th>Состояние</th><th>Примечание</th><th>Действия</th></tr></thead><tbody id="dbrows"></tbody></table></div></div></section>
 <section id="metro" class="page"><div class="hero glass"><div><h1>🚇 Метрополитен</h1><p>Линии, ПС и характеристики станций.</p></div><div class="actions"><button class="btn primary" data-action="add-line">＋ Новая линия</button><button class="btn success" data-action="add-train">＋ Добавить ПС</button><button class="btn secondary" data-action="mass-train">＋ Массовое добавление</button><button class="btn danger" data-action="delete-all-lines">🗑 Удалить все линии</button></div></div><div class="glass panel" id="metrokpi"></div><div class="grid2"><aside class="glass panel"><h2>Линии метро</h2><div id="lines" class="line-list"></div><div class="actions" style="margin-top:12px"><button class="btn secondary small" data-action="edit-line">✏️ Изменить</button><button class="btn danger small" data-action="delete-line">🗑 Удалить</button></div></aside><div class="glass panel"><div class="toolbar"><input class="input" id="metroq" placeholder="Поиск по номеру, модели, депо, линии"><select id="metrostate"><option value="">Все состояния</option><option>Эксплуатируется</option><option>В ремонте</option><option>На мойке</option><option>В депо</option><option>Переформирован</option><option>Перецеплен</option><option>Выведен из эксплуатации</option><option>Списан</option></select></div><div class="actions" style="margin-bottom:12px"><select class="input" id="assign" style="max-width:300px"><option value="">— выбрать линию —</option></select><button class="btn primary small" data-action="assign">🚇 Выдать на линию</button><button class="btn danger small" data-action="delete-trains">🗑 Удалить выбранные</button></div><div class="table"><table><thead><tr><th><input type="checkbox" id="checkall"></th><th>№</th><th>Модель</th><th>Вагоны</th><th>Год</th><th>Депо</th><th>Место</th><th>Линия</th><th>Состояние</th><th>Примечание</th><th></th></tr></thead><tbody id="metrorows"></tbody></table></div></div></div><div class="glass panel" style="margin-top:16px"><div class="hero" style="padding:0 0 14px;margin:0"><div><h2>🚉 Станции метро</h2><p>Год постройки, открытие, пути, линии, пересадки и примечания.</p></div><button class="btn primary" data-action="add-station">＋ Добавить станцию</button></div><div id="stations" class="stations"></div></div></section>
 <section id="board" class="page"><div class="hero glass"><div><h1>📺 Станционное табло</h1><p>Создай остановку — она появится на чёрном табло жёлтым точечным текстом.</p></div></div><div class="glass panel"><div class="toolbar"><input class="input" id="stopname" placeholder="Например: MX-ИГРАДЕЛЬ"><button class="btn primary" data-action="add-stop">＋ Создать остановку</button></div><div id="stops" class="actions"></div></div><div class="board" id="boardview"></div></section>
 </main><div class="status" id="status">☁️ Подключение…</div><div id="modal"></div>
@@ -34,6 +34,16 @@ let selectedLine='l1',ready=false,timer;
 const $=id=>document.getElementById(id),esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function msg(x){$('status').textContent=x}
 const SYNC_DRAFT_KEY='uzdtransport_sync_conflict_v1';
+const LOCAL_STATE_KEY='uzdtransport_local_state_v1';
+let localOnly=false;
+function saveLocalState(snapshot=S){
+  try{localStorage.setItem(LOCAL_STATE_KEY,JSON.stringify({saved_at:new Date().toISOString(),data:snapshot}));return true}
+  catch(e){console.error('UZDphoto local save error:',e);msg('⚠️ Не удалось сохранить копию в браузере: '+String(e.message||e).slice(0,90));return false}
+}
+function readLocalState(){
+  try{const raw=localStorage.getItem(LOCAL_STATE_KEY);if(!raw)return null;const parsed=JSON.parse(raw);return parsed&&parsed.data&&typeof parsed.data==='object'?parsed:null}
+  catch(e){console.warn('UZDphoto local cache is invalid:',e);return null}
+}
 let serverUpdatedAt=null,saveInFlight=false,dirty=false,changeSeq=0,realtimeClient=null,realtimeChannel=null,conflictDraft=null,pollTimer=null;
 function cloneState(value){return JSON.parse(JSON.stringify(value))}
 function msg(value){
@@ -86,15 +96,22 @@ async function load(){
       if(!created)throw Error('Не удалось создать общую запись railphoto_shared_state');
       Object.assign(S,created.data||{});serverUpdatedAt=created.updated_at||null;
     }
-    normalizeState();ready=true;dirty=false;changeSeq=0;renderAll();
+    normalizeState();ready=true;localOnly=false;dirty=false;changeSeq=0;saveLocalState(cloneState(S));renderAll();
     const savedDraft=localStorage.getItem(SYNC_DRAFT_KEY);
     if(savedDraft){try{conflictDraft=JSON.parse(savedDraft)}catch(_){conflictDraft={raw:savedDraft}}}
     await connectRealtime();
     if(conflictDraft)msg('⚠ Есть локальный черновик конфликта. Нажми здесь, чтобы скачать его и обновить данные');
     else msg('☁️ Облачная база подключена · синхронизация активна');
   }catch(e){
-    console.error('UZDphoto sync load error:',e);ready=false;renderAll();
-    msg('⚠️ Ошибка загрузки облака: '+String(e.message||e).slice(0,110));
+    console.error('UZDphoto sync load error:',e);
+    const cached=readLocalState();
+    if(cached){
+      Object.assign(S,cached.data);normalizeState();ready=true;localOnly=true;dirty=false;
+      renderAll();msg('📱 Открыты локальные данные · облако недоступно, изменения сохраняются в браузере');
+    }else{
+      ready=false;renderAll();
+      msg('⚠️ Облако недоступно и локальной копии пока нет: '+String(e.message||e).slice(0,95));
+    }
   }
 }
 async function writeSharedState(snapshot){
@@ -130,6 +147,8 @@ function storeConflict(localSnapshot,reason){
 }
 async function save(){
   if(!ready||conflictDraft)return;
+  if(!saveLocalState(cloneState(S)))return;
+  if(localOnly){dirty=false;msg('📱 Сохранено на этом устройстве · облако пока недоступно');return}
   if(saveInFlight){dirty=true;return}
   saveInFlight=true;const sequence=changeSeq,snapshot=cloneState(S);dirty=false;
   try{
@@ -144,6 +163,7 @@ async function save(){
   }finally{saveInFlight=false;if(dirty&&ready&&!conflictDraft)queue()}
 }
 function queue(){
+  saveLocalState(cloneState(S));
   if(!ready||conflictDraft)return;
   dirty=true;changeSeq++;clearTimeout(timer);timer=setTimeout(save,500);
 }
@@ -153,6 +173,7 @@ async function applyRemoteState(){
   if(!row||!row.data||row.updated_at===serverUpdatedAt)return;
   if(dirty){storeConflict(cloneState(S),'На сервере появились изменения, пока в этом браузере были несохранённые правки.');return}
   Object.assign(S,row.data);normalizeState();serverUpdatedAt=row.updated_at||null;
+  saveLocalState(cloneState(S));localOnly=false;
   renderAll();msg('☁️ Получены изменения с другого устройства');
 }
 async function connectRealtime(){
@@ -180,7 +201,7 @@ async function connectRealtime(){
       });
   }catch(e){console.warn('Realtime unavailable; polling fallback is active:',e)}
 }
-window.addEventListener('online',()=>{if(ready&&!conflictDraft)applyRemoteState().catch(e=>console.warn(e))});
+window.addEventListener('online',()=>{if(localOnly){load().catch(e=>console.warn('Cloud reconnect:',e));return}if(ready&&!conflictDraft)applyRemoteState().catch(e=>console.warn(e))});
 function go(p){document.querySelectorAll('.page').forEach(x=>x.classList.toggle('active',x.id===p));document.querySelectorAll('#nav button').forEach(x=>x.classList.toggle('active',x.dataset.page===p));if(p==='profile')renderProfile();if(p==='news')renderNews();if(p==='db')renderDb();if(p==='metro')renderMetro();if(p==='board')renderBoard()}
 document.querySelectorAll('#nav button').forEach(x=>x.onclick=()=>go(x.dataset.page));
 function openModal(title,html,fn){$('modal').innerHTML='<div class="modalbg"><div class="modal"><div class="modalhead"><h2>'+title+'</h2><button class="close" id="mc">×</button></div>'+html+'<div class="actions" style="justify-content:flex-end;margin-top:18px"><button class="btn secondary" id="mx">Отмена</button><button class="btn primary" id="ms">Сохранить</button></div></div></div>';$('mc').onclick=$('mx').onclick=()=>$('modal').innerHTML='';$('ms').onclick=()=>{if(fn()!==false)$('modal').innerHTML=''}}
