@@ -33,10 +33,153 @@ const S={profile:{name:'Максим',role:'Машинист-инструкто�
 let selectedLine='l1',ready=false,timer;
 const $=id=>document.getElementById(id),esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function msg(x){$('status').textContent=x}
-async function api(path,opt={}){const headers={apikey:K,'Content-Type':'application/json',Prefer:'return=representation',...(opt.headers||{})};delete headers.Authorization;const r=await fetch(U+'/rest/v1/'+path,{...opt,headers});if(!r.ok)throw Error(await r.text());return r.status===204?[]:r.json()}
-async function load(){try{msg('☁️ Подключение к облаку…');const a=await api('railphoto_shared_state?select=data&id=eq.main');if(a[0]?.data)Object.assign(S,a[0].data);const r=await api('rolling_stock?select=client_id,data,inventory_number,type,status,depot,manufacturer,build_year,note&order=id');if(!Array.isArray(S.db)||!S.db.length)S.db=r.map(x=>x.data||{id:x.client_id,series:x.inventory_number||'',category:x.type||'Локомотив',gauge:'750 мм',depot:x.depot||'',factory:x.manufacturer||'',buildYear:x.build_year||'',status:x.status||'В эксплуатации',notes:x.note||''});ready=true;renderAll();msg('☁️ Облачная база подключена')}catch(e){console.error(e);ready=false;renderAll();msg('⚠️ Ошибка облачной базы')}}
-async function save(){if(!ready)return;try{const d=JSON.parse(JSON.stringify(S));const rows=S.db.map(x=>({client_id:String(x.id),inventory_number:x.series||'',name:x.series||'',series:x.series||'',type:x.category||'Локомотив',status:x.status||'В эксплуатации',depot:x.depot||'',manufacturer:x.factory||'',build_year:+x.buildYear||null,note:x.notes||'',data:x,updated_at:new Date().toISOString()}));await api('railphoto_shared_state',{method:'POST',body:JSON.stringify([{id:'main',data:d,updated_at:new Date().toISOString()}]),headers:{Prefer:'resolution=merge-duplicates,return=minimal'}});if(rows.length)await api('rolling_stock',{method:'POST',body:JSON.stringify(rows),headers:{Prefer:'resolution=merge-duplicates,return=minimal'}});msg('☁️ Сохранено в облаке')}catch(e){console.error(e);msg('⚠️ Не удалось сохранить в облако')}}
-function queue(){clearTimeout(timer);timer=setTimeout(save,450)}
+const SYNC_DRAFT_KEY='uzdtransport_sync_conflict_v1';
+let serverUpdatedAt=null,saveInFlight=false,dirty=false,changeSeq=0,realtimeClient=null,realtimeChannel=null,conflictDraft=null,pollTimer=null;
+function cloneState(value){return JSON.parse(JSON.stringify(value))}
+function msg(value){
+  const el=$('status');el.textContent=value;
+  el.style.cursor=conflictDraft?'pointer':'default';
+  el.title=conflictDraft?'Нажми, чтобы скачать локальные изменения и загрузить актуальную облачную версию':'';
+  el.onclick=conflictDraft?exportConflictDraft:null;
+}
+function exportConflictDraft(){
+  if(!conflictDraft)return;
+  const blob=new Blob([JSON.stringify(conflictDraft,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download='uzdtransport-sync-conflict.json';a.click();URL.revokeObjectURL(url);
+  localStorage.removeItem(SYNC_DRAFT_KEY);conflictDraft=null;ready=false;load();
+}
+async function api(path,opt={}){
+  const headers={apikey:K,Authorization:'Bearer '+K,'Content-Type':'application/json',...(opt.headers||{})};
+  const response=await fetch(U+'/rest/v1/'+path,{...opt,headers});
+  const body=await response.text();
+  if(!response.ok)throw Error('HTTP '+response.status+': '+body.slice(0,700));
+  if(!body)return [];
+  try{return JSON.parse(body)}catch(_){return body}
+}
+async function readSharedState(){
+  const rows=await api('railphoto_shared_state?select=id,data,updated_at&id=eq.main');
+  return Array.isArray(rows)?(rows[0]||null):null;
+}
+function normalizeState(){
+  if(!S.profile||typeof S.profile!=='object')S.profile={};
+  ['notes','news','db','lines','trains','stations','stops'].forEach(k=>{if(!Array.isArray(S[k]))S[k]=[]});
+  if(!S.profile.name)S.profile.name='Максим';
+}
+async function loadLegacyRollingStock(){
+  const rows=await api('rolling_stock?select=client_id,data,inventory_number,type,status,depot,manufacturer,build_year,note&order=id');
+  S.db=(rows||[]).map(x=>x.data||{id:x.client_id,series:x.inventory_number||'',category:x.type||'Локомотив',gauge:'750 мм',depot:x.depot||'',factory:x.manufacturer||'',buildYear:x.build_year||'',status:x.status||'В эксплуатации',notes:x.note||''});
+}
+async function load(){
+  try{
+    msg('☁️ Подключение к облаку…');
+    const row=await readSharedState();
+    if(row&&row.data){
+      Object.assign(S,row.data);
+      if(!Object.prototype.hasOwnProperty.call(row.data,'db'))await loadLegacyRollingStock();
+      serverUpdatedAt=row.updated_at||null;
+    }else{
+      await loadLegacyRollingStock();
+      const now=new Date().toISOString();
+      await api('railphoto_shared_state',{method:'POST',body:JSON.stringify([{id:'main',data:cloneState(S),updated_at:now}]),headers:{Prefer:'resolution=ignore-duplicates,return=representation'}});
+      const created=await readSharedState();
+      if(!created)throw Error('Не удалось создать общую запись railphoto_shared_state');
+      Object.assign(S,created.data||{});serverUpdatedAt=created.updated_at||null;
+    }
+    normalizeState();ready=true;dirty=false;changeSeq=0;renderAll();
+    const savedDraft=localStorage.getItem(SYNC_DRAFT_KEY);
+    if(savedDraft){try{conflictDraft=JSON.parse(savedDraft)}catch(_){conflictDraft={raw:savedDraft}}}
+    await connectRealtime();
+    if(conflictDraft)msg('⚠ Есть локальный черновик конфликта. Нажми здесь, чтобы скачать его и обновить данные');
+    else msg('☁️ Облачная база подключена · синхронизация активна');
+  }catch(e){
+    console.error('UZDphoto sync load error:',e);ready=false;renderAll();
+    msg('⚠️ Ошибка загрузки облака: '+String(e.message||e).slice(0,110));
+  }
+}
+async function writeSharedState(snapshot){
+  const now=new Date().toISOString();
+  const filter=serverUpdatedAt!==null
+    ?'railphoto_shared_state?id=eq.main&updated_at=eq.'+encodeURIComponent(serverUpdatedAt)
+    :'railphoto_shared_state?id=eq.main&updated_at=is.null';
+  const rows=await api(filter,{method:'PATCH',body:JSON.stringify({data:snapshot,updated_at:now}),headers:{Prefer:'return=representation'}});
+  if(!Array.isArray(rows)||!rows.length){const error=new Error('Облачная запись изменилась на другом устройстве');error.syncConflict=true;throw error}
+  return rows[0]&&rows[0].updated_at?rows[0].updated_at:now;
+}
+async function syncRollingStock(snapshot){
+  const db=Array.isArray(snapshot.db)?snapshot.db:[];
+  const rows=db.map((x,i)=>{
+    const id=String(x.id||('ps-migrated-'+i));x.id=id;
+    return {client_id:id,inventory_number:x.series||'',name:x.series||'',series:x.series||'',type:x.category||'Локомотив',status:x.status||'В эксплуатации',depot:x.depot||'',manufacturer:x.factory||'',build_year:Number(x.buildYear)||null,note:x.notes||'',data:x,updated_at:new Date().toISOString()};
+  });
+  const existing=await api('rolling_stock?select=client_id');
+  const wanted=new Set(rows.map(x=>x.client_id));
+  const stale=(existing||[]).map(x=>x.client_id).filter(x=>x&&!wanted.has(String(x)));
+  if(stale.length){
+    const values=stale.map(x=>'"'+String(x).replace(/"/g,'\\"')+'"').join(',');
+    await api('rolling_stock?client_id=in.('+encodeURIComponent(values)+')',{method:'DELETE',headers:{Prefer:'return=minimal'}});
+  }
+  if(rows.length)await api('rolling_stock?on_conflict=client_id',{method:'POST',body:JSON.stringify(rows),headers:{Prefer:'resolution=merge-duplicates,return=minimal'}});
+}
+function storeConflict(localSnapshot,reason){
+  conflictDraft={created_at:new Date().toISOString(),reason:reason,local_state:localSnapshot};
+  try{localStorage.setItem(SYNC_DRAFT_KEY,JSON.stringify(conflictDraft))}catch(e){console.error('Could not store sync draft:',e)}
+  ready=false;dirty=false;
+  msg('⚠ Конфликт синхронизации. Нажми на это сообщение, чтобы скачать локальные изменения');
+}
+async function save(){
+  if(!ready||conflictDraft)return;
+  if(saveInFlight){dirty=true;return}
+  saveInFlight=true;const sequence=changeSeq,snapshot=cloneState(S);dirty=false;
+  try{
+    serverUpdatedAt=await writeSharedState(snapshot);
+    try{await syncRollingStock(snapshot)}catch(mirrorError){console.error('Rolling stock mirror sync error:',mirrorError);msg('⚠️ Основные данные сохранены; ошибка копии базы ПС: '+String(mirrorError.message||mirrorError).slice(0,90))}
+    if(sequence===changeSeq){dirty=false;if(!conflictDraft)msg('☁️ Сохранено · все устройства обновляются автоматически')}
+    else dirty=true;
+  }catch(e){
+    console.error('UZDphoto sync save error:',e);
+    if(e.syncConflict)storeConflict(snapshot,e.message);
+    else msg('⚠️ Ошибка сохранения: '+String(e.message||e).slice(0,120));
+  }finally{saveInFlight=false;if(dirty&&ready&&!conflictDraft)queue()}
+}
+function queue(){
+  if(!ready||conflictDraft)return;
+  dirty=true;changeSeq++;clearTimeout(timer);timer=setTimeout(save,500);
+}
+async function applyRemoteState(){
+  if(!ready||conflictDraft||saveInFlight)return;
+  const row=await readSharedState();
+  if(!row||!row.data||row.updated_at===serverUpdatedAt)return;
+  if(dirty){storeConflict(cloneState(S),'На сервере появились изменения, пока в этом браузере были несохранённые правки.');return}
+  Object.assign(S,row.data);normalizeState();serverUpdatedAt=row.updated_at||null;
+  renderAll();msg('☁️ Получены изменения с другого устройства');
+}
+async function connectRealtime(){
+  if(pollTimer)return;
+  pollTimer=setInterval(()=>{if(document.visibilityState==='visible'&&ready&&!conflictDraft&&!saveInFlight)applyRemoteState().catch(e=>console.warn('Sync check:',e))},15000);
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&ready&&!conflictDraft)applyRemoteState().catch(e=>console.warn('Sync resume:',e))});
+  try{
+    if(!window.supabase||!window.supabase.createClient){
+      await new Promise((resolve,reject)=>{
+        const script=document.createElement('script');script.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+        script.onload=resolve;script.onerror=()=>reject(new Error('Не удалось загрузить Supabase Realtime'));
+        document.head.appendChild(script);
+      });
+    }
+    if(!window.supabase||!window.supabase.createClient)throw new Error('Supabase JS не загрузился');
+    realtimeClient=window.supabase.createClient(U,K);
+    realtimeChannel=realtimeClient.channel('uzdphoto-shared-state')
+      .on('postgres_changes',{event:'*',schema:'public',table:'railphoto_shared_state',filter:'id=eq.main'},payload=>{
+        if(saveInFlight||!ready||conflictDraft)return;
+        if(payload.new&&payload.new.updated_at!==serverUpdatedAt)applyRemoteState().catch(e=>console.error('Realtime sync:',e));
+      })
+      .subscribe(state=>{
+        if(state==='SUBSCRIBED'&&!conflictDraft)msg('☁️ Синхронизация в реальном времени активна');
+        else if(state==='CHANNEL_ERROR'||state==='TIMED_OUT')console.warn('Realtime недоступен; включена резервная проверка');
+      });
+  }catch(e){console.warn('Realtime unavailable; polling fallback is active:',e)}
+}
+window.addEventListener('online',()=>{if(ready&&!conflictDraft)applyRemoteState().catch(e=>console.warn(e))});
 function go(p){document.querySelectorAll('.page').forEach(x=>x.classList.toggle('active',x.id===p));document.querySelectorAll('#nav button').forEach(x=>x.classList.toggle('active',x.dataset.page===p));if(p==='profile')renderProfile();if(p==='news')renderNews();if(p==='db')renderDb();if(p==='metro')renderMetro();if(p==='board')renderBoard()}
 document.querySelectorAll('#nav button').forEach(x=>x.onclick=()=>go(x.dataset.page));
 function openModal(title,html,fn){$('modal').innerHTML='<div class="modalbg"><div class="modal"><div class="modalhead"><h2>'+title+'</h2><button class="close" id="mc">×</button></div>'+html+'<div class="actions" style="justify-content:flex-end;margin-top:18px"><button class="btn secondary" id="mx">Отмена</button><button class="btn primary" id="ms">Сохранить</button></div></div></div>';$('mc').onclick=$('mx').onclick=()=>$('modal').innerHTML='';$('ms').onclick=()=>{if(fn()!==false)$('modal').innerHTML=''}}
