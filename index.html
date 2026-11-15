@@ -98,7 +98,8 @@ async function load(){
   }
 }
 async function writeSharedState(snapshot){
-  const now=new Date().toISOString();
+  const previous=Date.parse(serverUpdatedAt||'')||0;
+  const now=new Date(Math.max(Date.now(),previous+1)).toISOString();
   const filter=serverUpdatedAt!==null
     ?'railphoto_shared_state?id=eq.main&updated_at=eq.'+encodeURIComponent(serverUpdatedAt)
     :'railphoto_shared_state?id=eq.main&updated_at=is.null';
