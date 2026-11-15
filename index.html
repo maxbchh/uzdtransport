@@ -36,8 +36,8 @@ function msg(x){$('status').textContent=x}
 const SYNC_DRAFT_KEY='uzdtransport_sync_conflict_v1';
 const LOCAL_STATE_KEY='uzdtransport_local_state_v1';
 let localOnly=false;
-function saveLocalState(snapshot=S){
-  try{localStorage.setItem(LOCAL_STATE_KEY,JSON.stringify({saved_at:new Date().toISOString(),data:snapshot}));return true}
+function saveLocalState(snapshot=S,pending=false){
+  try{localStorage.setItem(LOCAL_STATE_KEY,JSON.stringify({saved_at:new Date().toISOString(),pending:!!pending,data:snapshot}));return true}
   catch(e){console.error('UZDphoto local save error:',e);msg('⚠️ Не удалось сохранить копию в браузере: '+String(e.message||e).slice(0,90));return false}
 }
 function readLocalState(){
@@ -81,6 +81,7 @@ async function loadLegacyRollingStock(){
   S.db=(rows||[]).map(x=>x.data||{id:x.client_id,series:x.inventory_number||'',category:x.type||'Локомотив',gauge:'750 мм',depot:x.depot||'',factory:x.manufacturer||'',buildYear:x.build_year||'',status:x.status||'В эксплуатации',notes:x.note||''});
 }
 async function load(){
+  const pendingLocal=readLocalState();
   try{
     msg('☁️ Подключение к облаку…');
     const row=await readSharedState();
@@ -96,7 +97,8 @@ async function load(){
       if(!created)throw Error('Не удалось создать общую запись railphoto_shared_state');
       Object.assign(S,created.data||{});serverUpdatedAt=created.updated_at||null;
     }
-    normalizeState();ready=true;localOnly=false;dirty=false;changeSeq=0;saveLocalState(cloneState(S));renderAll();
+    normalizeState();ready=true;localOnly=false;dirty=false;changeSeq=0;renderAll();
+    if(pendingLocal&&pendingLocal.pending){storeConflict(pendingLocal.data,'В браузере есть несинхронизированные изменения. Они сохранены отдельно, чтобы не затереть их облачными данными.')}else saveLocalState(cloneState(S),false);
     const savedDraft=localStorage.getItem(SYNC_DRAFT_KEY);
     if(savedDraft){try{conflictDraft=JSON.parse(savedDraft)}catch(_){conflictDraft={raw:savedDraft}}}
     await connectRealtime();
@@ -109,8 +111,8 @@ async function load(){
       Object.assign(S,cached.data);normalizeState();ready=true;localOnly=true;dirty=false;
       renderAll();msg('📱 Открыты локальные данные · облако недоступно, изменения сохраняются в браузере');
     }else{
-      ready=false;renderAll();
-      msg('⚠️ Облако недоступно и локальной копии пока нет: '+String(e.message||e).slice(0,95));
+      normalizeState();ready=true;localOnly=true;dirty=false;saveLocalState(cloneState(S),false);renderAll();
+      msg('📱 Облако недоступно · создана локальная база на этом устройстве');
     }
   }
 }
@@ -147,12 +149,13 @@ function storeConflict(localSnapshot,reason){
 }
 async function save(){
   if(!ready||conflictDraft)return;
-  if(!saveLocalState(cloneState(S)))return;
+  if(!saveLocalState(cloneState(S),true))return;
   if(localOnly){dirty=false;msg('📱 Сохранено на этом устройстве · облако пока недоступно');return}
   if(saveInFlight){dirty=true;return}
   saveInFlight=true;const sequence=changeSeq,snapshot=cloneState(S);dirty=false;
   try{
     serverUpdatedAt=await writeSharedState(snapshot);
+    saveLocalState(snapshot,false);
     try{await syncRollingStock(snapshot)}catch(mirrorError){console.error('Rolling stock mirror sync error:',mirrorError);msg('⚠️ Основные данные сохранены; ошибка копии базы ПС: '+String(mirrorError.message||mirrorError).slice(0,90))}
     if(sequence===changeSeq){dirty=false;if(!conflictDraft)msg('☁️ Сохранено · все устройства обновляются автоматически')}
     else dirty=true;
@@ -163,7 +166,7 @@ async function save(){
   }finally{saveInFlight=false;if(dirty&&ready&&!conflictDraft)queue()}
 }
 function queue(){
-  saveLocalState(cloneState(S));
+  saveLocalState(cloneState(S),true);
   if(!ready||conflictDraft)return;
   dirty=true;changeSeq++;clearTimeout(timer);timer=setTimeout(save,500);
 }
